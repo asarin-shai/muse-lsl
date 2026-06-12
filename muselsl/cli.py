@@ -1,7 +1,16 @@
 #!/usr/bin/python
 import sys
 import argparse
+import json
+import os
 from .constants import LOG_LEVELS
+
+
+def _load_config(path):
+    if not path:
+        return {}
+    with open(path, 'r') as f:
+        return json.load(f)
 
 class CLI:
     def __init__(self, command):
@@ -226,39 +235,45 @@ class CLI:
         parser = argparse.ArgumentParser(
             description='View EEG data from an LSL stream.')
         parser.add_argument(
+            "--config",
+            dest="config",
+            type=str,
+            default=None,
+            help="Path to JSON config file for viewer settings.")
+        parser.add_argument(
             "-w",
             "--window",
             dest="window",
             type=float,
-            default=5.,
+            default=None,
             help="Window length to display in seconds.")
         parser.add_argument(
             "-s",
             "--scale",
             dest="scale",
             type=float,
-            default=100,
+            default=None,
             help="Scale in uV.")
         parser.add_argument(
             "-r",
             "--refresh",
             dest="refresh",
             type=float,
-            default=0.2,
+            default=None,
             help="Refresh rate in seconds.")
         parser.add_argument(
             "-f",
             "--figure",
             dest="figure",
             type=str,
-            default="15x6",
+            default=None,
             help="Window size.")
         parser.add_argument(
             "-v",
             "--version",
             dest="version",
             type=int,
-            default=1,
+            default=None,
             help=
             "Viewer version (1 or 2) - 1 is the default stable version, 2 is in development (and takes no arguments)."
         )
@@ -267,9 +282,53 @@ class CLI:
             "--backend",
             dest="backend",
             type=str,
-            default='TkAgg',
+            default=None,
             help="Matplotlib backend to use. Default: %(default)s")
+        parser.add_argument(
+            "--filter",
+            dest="filt",
+            action="store_true",
+            help="Start with bandpass filter enabled")
+        parser.add_argument(
+            "--no-filter",
+            dest="filt",
+            action="store_false",
+            help="Start with bandpass filter disabled")
+        parser.set_defaults(filt=None)
+        parser.add_argument(
+            "--window-step",
+            dest="window_step",
+            type=float,
+            default=None,
+            help="Seconds to increment/decrement window when pressing +/- in viewer v1")
+        parser.add_argument(
+            "--scale-factor",
+            dest="scale_factor",
+            type=float,
+            default=None,
+            help="Scale factor applied when zooming with /* in viewer v1")
+        parser.add_argument(
+            "--subsample",
+            dest="subsample",
+            type=int,
+            default=None,
+            help="Subsampling factor for viewer v1 plotting")
         args = parser.parse_args(sys.argv[2:])
+
+        cfg = _load_config(args.config)
+        window = args.window if args.window is not None else cfg.get('window', float(os.getenv('MUSELSL_VIEW_WINDOW', 5.0)))
+        scale = args.scale if args.scale is not None else cfg.get('scale', float(os.getenv('MUSELSL_VIEW_SCALE', 100.0)))
+        refresh = args.refresh if args.refresh is not None else cfg.get('refresh', float(os.getenv('MUSELSL_VIEW_REFRESH', 0.2)))
+        figure = args.figure if args.figure is not None else cfg.get('figure', os.getenv('MUSELSL_VIEW_FIGURE', '15x6'))
+        version = args.version if args.version is not None else int(cfg.get('version', int(os.getenv('MUSELSL_VIEW_VERSION', 1))))
+        backend = args.backend if args.backend is not None else cfg.get('backend', os.getenv('MUSELSL_VIEW_BACKEND', 'TkAgg'))
+        filt = args.filt if args.filt is not None else cfg.get('filt', os.getenv('MUSELSL_VIEW_FILTER', 'true').lower() in ('1', 'true', 'yes', 'on'))
+        window_step = args.window_step if args.window_step is not None else float(cfg.get('window_step', os.getenv('MUSELSL_VIEW_WINDOW_STEP', 1.0)))
+        scale_factor = args.scale_factor if args.scale_factor is not None else float(cfg.get('scale_factor', os.getenv('MUSELSL_VIEW_SCALE_FACTOR', 1.2)))
+        subsample = args.subsample if args.subsample is not None else cfg.get('subsample', os.getenv('MUSELSL_VIEW_SUBSAMPLE'))
+        subsample = int(subsample) if subsample is not None else None
+
         from . import view
-        view(args.window, args.scale, args.refresh, args.figure, args.version,
-             args.backend)
+        view(window, scale, refresh, figure, version,
+             backend, filt=filt, window_step=window_step,
+             scale_factor=scale_factor, subsample=subsample)
