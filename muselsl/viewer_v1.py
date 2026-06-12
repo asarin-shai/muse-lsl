@@ -8,7 +8,8 @@ from threading import Thread
 from .constants import VIEW_BUFFER, VIEW_SUBSAMPLE, LSL_SCAN_TIMEOUT, LSL_EEG_CHUNK
 
 
-def view(window, scale, refresh, figure, backend, version=1):
+def view(window, scale, refresh, figure, backend, version=1, filt=True,
+         window_step=1.0, scale_factor=1.2, subsample=None):
     matplotlib.use(backend)
     sns.set(style="whitegrid")
 
@@ -22,7 +23,9 @@ def view(window, scale, refresh, figure, backend, version=1):
     print("Start acquiring data.")
 
     fig, axes = matplotlib.pyplot.subplots(1, 1, figsize=figsize, sharex=True)
-    lslv = LSLViewer(streams[0], fig, axes, window, scale)
+    lslv = LSLViewer(streams[0], fig, axes, window, scale, filt=filt,
+                     window_step=window_step, scale_factor=scale_factor,
+                     subsample=subsample)
     fig.canvas.mpl_connect('close_event', lslv.stop)
 
     help_str = """
@@ -39,15 +42,18 @@ def view(window, scale, refresh, figure, backend, version=1):
 
 
 class LSLViewer():
-    def __init__(self, stream, fig, axes, window, scale, dejitter=True):
+    def __init__(self, stream, fig, axes, window, scale, dejitter=True,
+                 filt=True, window_step=1.0, scale_factor=1.2, subsample=None):
         """Init"""
         self.stream = stream
         self.window = window
         self.scale = scale
         self.dejitter = dejitter
         self.inlet = StreamInlet(stream, max_chunklen=LSL_EEG_CHUNK)
-        self.filt = True
-        self.subsample = VIEW_SUBSAMPLE
+        self.filt = filt
+        self.subsample = VIEW_SUBSAMPLE if subsample is None else subsample
+        self.window_step = window_step
+        self.scale_factor = scale_factor
 
         info = self.inlet.info()
         description = info.desc()
@@ -159,14 +165,14 @@ class LSLViewer():
 
     def OnKeypress(self, event):
         if event.key == '/':
-            self.scale *= 1.2
+            self.scale *= self.scale_factor
         elif event.key == '*':
-            self.scale /= 1.2
+            self.scale /= self.scale_factor
         elif event.key == '+':
-            self.window += 1
+            self.window += self.window_step
         elif event.key == '-':
-            if self.window > 1:
-                self.window -= 1
+            if self.window > self.window_step:
+                self.window -= self.window_step
         elif event.key == 'd':
             self.filt = not(self.filt)
 

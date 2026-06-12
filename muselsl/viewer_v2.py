@@ -76,7 +76,7 @@ void main() {
 """
 
 
-def view():
+def view(window=10, scale=500, refresh=0.0, filt=True):
     print("Looking for an EEG stream...")
     streams = resolve_byprop('type', 'EEG', timeout=LSL_SCAN_TIMEOUT)
 
@@ -85,12 +85,12 @@ def view():
     print("Start acquiring data.")
 
     inlet = StreamInlet(streams[0], max_chunklen=LSL_EEG_CHUNK)
-    Canvas(inlet)
+    Canvas(inlet, window=window, scale=scale, refresh=refresh, filt=filt)
     app.run()
 
 
 class Canvas(app.Canvas):
-    def __init__(self, lsl_inlet, scale=500, filt=True):
+    def __init__(self, lsl_inlet, window=10, scale=500, refresh=0.0, filt=True):
         app.Canvas.__init__(self, title='EEG - Use your wheel to zoom!',
                             keys='interactive')
 
@@ -98,7 +98,6 @@ class Canvas(app.Canvas):
         info = self.inlet.info()
         description = info.desc()
 
-        window = 10
         self.sfreq = info.nominal_srate()
         n_samples = int(self.sfreq * window)
         self.n_chans = info.channel_count()
@@ -169,7 +168,8 @@ class Canvas(app.Canvas):
         zi = lfilter_zi(self.bf, self.af)
         self.filt_state = np.tile(zi, (self.n_chans, 1)).transpose()
 
-        self._timer = app.Timer('auto', connect=self.on_timer, start=True)
+        interval = 'auto' if refresh <= 0 else refresh
+        self._timer = app.Timer(interval, connect=self.on_timer, start=True)
         gloo.set_viewport(0, 0, *self.physical_size)
         gloo.set_state(clear_color='black', blend=True,
                        blend_func=('src_alpha', 'one_minus_src_alpha'))
